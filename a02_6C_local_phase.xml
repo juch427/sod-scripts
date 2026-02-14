@@ -1,0 +1,148 @@
+<?xml version="1.0"?>
+<!-- SOD 脚本：用于根据地震事件下载地震波形数据 -->
+<!-- 官方文档: https://www.seis.sc.edu/sod/index.html -->
+<sod>
+
+	<!-- *******************************************************************
+	     第一部分：地震事件 (Event Arm)
+	     作用：筛选符合特定条件的地震（时间、震级、深度、地点等）
+	     ******************************************************************* -->
+	<eventArm>
+		<fdsnEvent>
+			<!-- 设定发震时刻范围 (UTC时间) -->
+			<originTimeRange>
+				<startTime>2018-01-30T00:00:00.000Z</startTime>
+				<endTime>2018-02-02T00:00:00.000Z</endTime>
+			</originTimeRange>
+			
+			<!-- 设定震级范围 (例如：5.5级到9.9级) -->
+			<magnitudeRange>
+				<min>3.0</min>
+				<max>9.9</max>
+			</magnitudeRange>
+
+			<!-- 设定震源深度范围 (单位：KILOMETER 千米) -->
+			<originDepthRange>
+				<unit>KILOMETER</unit>
+				<min>0</min>
+				<max>2000</max>
+			</originDepthRange>
+		</fdsnEvent>
+
+		<!-- 在终端屏幕上打印找到的地震信息摘要 -->
+		<printlineEventProcess/>
+
+		<!-- 将找到的地震目录保存到一个 CSV 文件中，方便后续查看 -->
+		<CSVEventPrinter>
+			<filename>event.csv</filename>
+		</CSVEventPrinter>
+
+	</eventArm>
+
+
+	<!-- *******************************************************************
+	     第二部分：台网 (Network Arm)
+	     作用：筛选符合条件的台站，并下载仪器响应信息 (PZ, RESP)
+	     ******************************************************************* -->
+	<networkArm>
+		
+		<fdsnStation>
+			<!-- 是否包含可用性信息，设为 false 可以加快元数据检索速度 -->
+			<includeAvailability>false</includeAvailability>
+			<!-- <host>geofon.gfz-potsdam.de</host> 如果要用特定数据中心（如 GEOFON）可开启此行 -->
+		</fdsnStation>
+
+		<!-- 台网代码：MM 代表缅甸国家台网 -->
+		<networkCode>MM</networkCode>   
+
+		<!-- 台站代码：* 代表下载该台网下的所有台站 -->
+		<stationCode>*</stationCode>
+
+		<!-- 通道代码：HH* 通常指高采样率的宽频带地震计 (如 HHZ, HHN, HHE) -->
+		<channelCode>HH*</channelCode>
+
+		<!-- 将仪器响应导出为 SAC 极点零点文件格式 -->
+		<sacPoleZeroWriter>
+			<workingDir>poles_zeros</workingDir>
+			<location>${network.code}.${station.code}.${channel.code}.sacpz</location>
+		</sacPoleZeroWriter>
+
+		<!-- 将仪器响应导出为 RESP 文本格式 -->
+		<responseWriter>
+			<workingDir>responses</workingDir>
+			<location>${network.code}.${station.code}.${channel.code}.resp</location>
+		</responseWriter>
+        
+		<!-- 在终端打印正在处理的台站/通道信息 -->
+		<printlineChannelProcess/>
+    
+	</networkArm>
+
+
+	<!-- *******************************************************************
+	     第三部分：波形 (Waveform Arm)
+	     作用：根据地震和台站的关系，请求具体的波形切片并进行预处理
+	     ******************************************************************* -->
+	<waveformArm>
+
+		<!-- 设定震中距范围：单位为 DEGREE (度)。30-175度通常属于远震观测范围 -->
+		<distanceRange>
+			<unit>DEGREE</unit>
+			<min>0</min>
+			<max>25</max>
+		</distanceRange>
+
+		<!-- 设定数据请求的时间窗（基于震相理论到时） -->
+		<originOffsetRequest>
+			<beginOffset>
+				<unit>SECOND</unit>
+				<value>0</value>
+			</beginOffset>
+			
+			<endOffset>
+				<unit>SECOND</unit>
+				<value>1000</value>
+			</endOffset>
+		</originOffsetRequest>
+
+		<!-- 数据选择源，默认从 IRIS 下载 -->
+		<fdsnDataSelect>
+			<!-- <host>geofon.gfz-potsdam.de</host> -->
+		</fdsnDataSelect>
+
+		<!-- 检查是否有任何数据覆盖 -->
+		<someCoverage/>
+
+		<!-- ****************** 信号预处理模块 ******************* -->
+		
+		<!-- 确保下载到了实际数据 -->
+		<someDataCoverage/>
+
+		<!-- 合并数据段、处理重叠、对缺失部分进行 0 填充 -->
+		<merge/>
+		<collapseOverlaps/>
+		<gapFill><zeroFill/></gapFill>
+
+		<!-- 基础地震学处理：去均值 (rMean)、去线性趋势 (rTrend)、加余弦窗削角 (taper) -->
+		<rMean/><rTrend/><taper/>
+
+		<!-- 保存：将原始 SAC 波形（含仪器响应）存入 seismograms_raw_sac 文件夹 -->
+		<!-- 目录结构按照：发震时间/文件名.sac -->
+		<sacWriter>			
+			<workingDir>seismograms_raw_sac</workingDir>
+			<location>$event.getTime('yyyy.MM.dd.HH.mm.ss')/$event.getTime('yyyy.MM.dd.HH.mm.ss').${network.code}.${station.code}.${channel.code}.sac</location>
+		</sacWriter>
+
+
+		<!-- 在终端打印波形处理进度 -->
+		<printlineSeismogramProcess/>
+
+		<!-- 执行外部系统命令（可选），这里只是简单 echo 提示 -->
+		<legacyExecute>
+			<command>echo Sod saved this file</command>
+		</legacyExecute>
+         	
+
+	</waveformArm>
+
+</sod>

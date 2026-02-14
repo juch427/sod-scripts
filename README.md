@@ -2,7 +2,7 @@
 Scripts used in SOD ([Standerd Order for Data](http://www.seis.sc.edu/sod/)) to download seismograms in several formats (e.g., SAC, miniSEED.)
 After downloading and installing [SOD](http://www.seis.sc.edu/downloads/sod/), we can run as:
 ```
-$ sod -f test_sws.xml
+$ sod -f a01_6C_EQ.xml
 ```
 ## Notes
 ### Data Center
