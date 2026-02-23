@@ -87,9 +87,3 @@ More detailed information and examples regarding SOD recipes can be found here:
 
 ## Reference
 - T. J. Owens, H. P. Crotwell, C. Groves, and P. Oliver-Paul. (2004). SOD: Standing Order for Data. _Seismological Research Letters_, 75(4), 515-520. [![Static Badge](https://img.shields.io/badge/DOI-10.1093%2Fgji/ggy448-blue)](https://doi.org/10.1785/gssrl.75.4.515-a)
-
-## Author
-
-**Changhui Ju**
-*   Email: juchanghui15@mails.ucas.ac.cn
-*   Copyright © 2026
