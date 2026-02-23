@@ -1,3 +1,4 @@
+# main.py
 import os
 import glob
 from tqdm import tqdm
@@ -20,36 +21,77 @@ def main():
         print(f"Error loading catalog: {e}")
         return
 
-    # 2. Scan Station Directories
-    # Structure assumption: rawdata/{net}_day_sac/{net}.{sta}
-    # First, find network directories
-    net_dirs = glob.glob(os.path.join(cfg.RAW_DATA_DIR, "*_day_sac"))
+    # 2. Scan Station Directories (Robust Version)
     station_paths = []
-    for nd in net_dirs:
-        # Find station folders within network folders
-        station_paths.extend(glob.glob(os.path.join(nd, "*.*")))
     
-    print(f"Found {len(station_paths)} station directories. Starting processing...")
+    # Method A: Try Flat Structure (rawdata/Net.Sta)
+    flat_candidates = glob.glob(os.path.join(cfg.RAW_DATA_DIR, "*.*"))
+    for p in flat_candidates:
+        if os.path.isdir(p) and len(os.path.basename(p).split('.')) == 2:
+            station_paths.append(p)
+            
+    # Method B: Try Nested Structure (rawdata/Net_day_sac/Net.Sta) - Original SOD style
+    if not station_paths:
+        nested_dirs = glob.glob(os.path.join(cfg.RAW_DATA_DIR, "*_day_sac"))
+        for nd in nested_dirs:
+            station_paths.extend(glob.glob(os.path.join(nd, "*.*")))
+    
+    # Remove duplicates and sort
+    station_paths = sorted(list(set(station_paths)))
+    total_stations = len(station_paths)
+    
+    print(f"Found {total_stations} station directories. Starting processing...")
 
-    # 3. Main Loop by Station (Station-First approach for efficiency)
-    for s_dir in tqdm(station_paths, desc="Processing Stations"):
+    # 3. Main Loop (Iterate through stations)
+    for idx, s_dir in enumerate(station_paths):
         dir_name = os.path.basename(s_dir)
         try:
             net, sta = dir_name.split('.')
         except ValueError:
-            continue # Skip folders that don't follow Net.Sta format
+            continue
+        
+        # Display Station Progress
+        print(f"[{idx+1}/{total_stations}] Processing Station: {net}.{sta}")
 
         # Get Station Coordinates (read only once per station)
         sample_files = glob.glob(os.path.join(s_dir, "*.sac"))
         if not sample_files: 
+            print(f"  -> No SAC files found, skipping.")
             continue
         
         stla, stlo, stel = utils.get_station_coords_fast(sample_files[0])
         if stla is None: 
+            print(f"  -> Coordinates missing, skipping.")
             continue
 
-        # 4. Loop through Events
-        for ev in events:
+        # --- OPTIMIZATION: Filter Events by Station Time Range ---
+        # Get start and end dates of the station's data
+        st_start, st_end = utils.get_station_time_range(s_dir)
+        
+        valid_events = []
+        if st_start and st_end:
+            # Add a buffer (e.g., +/- 1 day) to be safe
+            safe_start = st_start - 86400
+            safe_end = st_end + 86400
+            # Only keep events that occurred while the station was active
+            valid_events = [e for e in events if safe_start <= e['time'] <= safe_end]
+        else:
+            # Fallback if time parsing fails: use all events
+            valid_events = events
+            
+        if not valid_events:
+            print(f"  -> No events within station operating period. Skipping.")
+            continue
+            
+        # Optional: Print how many events are relevant
+        print(f"  -> Valid events: {len(valid_events)} / {len(events)}")
+        # ---------------------------------------------------------
+
+        # 4. Loop Events (Inner Loop)
+        # Use tqdm here to show progress PER STATION. 
+        # 'leave=False' clears the bar after station finishes to keep output clean.
+        for ev in tqdm(valid_events, desc="  Scanning Events", unit="ev", leave=False):
+            
             # 4.1 Epicentral Distance Filter
             dist = locations2degrees(ev['lat'], ev['lon'], stla, stlo)
             if not (cfg.MIN_DIST <= dist <= cfg.MAX_DIST):
@@ -84,7 +126,6 @@ def main():
             try:
                 st = Stream()
                 for f in files:
-                    # Reading full file; optimization possible with starttime/endtime arguments
                     st += read(f)
                 
                 # Merge waveforms (fill gaps with interpolation)
@@ -100,20 +141,19 @@ def main():
                 
                 # If components are missing (e.g., no 'E') or data is empty/incomplete
                 if not utils.check_3c_completeness(st_check):
-                    # Data is incomplete, skip this event for this station
                     continue
                 # -----------------------------------------------------
 
                 # 4.5 Remove Instrument Response (on original stream)
                 st = utils.remove_response(st, net, sta, cfg.RESPONSE_MODE)
                 
-                # 4.6 Define Output Path
+                # 4.6 Define Output Path (Naming Requirement)
                 if cfg.OUTPUT_STRUCTURE == 'event':
-                    # Folder format: YYYYMMDD_HHMMSS_Mag
-                    folder_name = f"{ev['time'].strftime('%Y%m%d_%H%M%S')}_M{ev['mag']}"
+                    # Folder Format: yyyy.mm.dd.hh.mm.ss
+                    folder_name = ev['time'].strftime("%Y.%m.%d.%H.%M.%S")
                     out_path = os.path.join(cfg.OUTPUT_DIR, folder_name)
                 else:
-                    # Folder format: Net.Sta
+                    # Folder Format: Net.Sta
                     out_path = os.path.join(cfg.OUTPUT_DIR, f"{net}.{sta}")
                 
                 if not os.path.exists(out_path): 
@@ -122,12 +162,11 @@ def main():
                 # 4.7 Final Processing and Saving
                 utils.process_and_save(st, ev, sks_abs, (stla, stlo, stel), out_path)
                 
-            except Exception as e:
+            except Exception:
                 # Catch individual waveform processing errors so the loop continues
-                # print(f"Error processing {net}.{sta}: {e}")
                 pass
 
-    print("--- Processing Complete ---")
+    print("\n--- Processing Complete ---")
 
 if __name__ == "__main__":
     main()

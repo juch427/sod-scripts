@@ -1,3 +1,4 @@
+# utils.py
 import os
 import glob
 import pandas as pd
@@ -19,7 +20,6 @@ def load_catalog(excel_path):
     events = []
     required_cols = ['origin_time', 'evlo', 'evla', 'evdp', 'mag']
     
-    # Check for missing columns
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Excel is missing required column: {col}")
@@ -34,7 +34,7 @@ def load_catalog(excel_path):
                 'depth': row['evdp'], # Assuming depth is in km
                 'mag': row['mag']
             })
-        except Exception as e:
+        except Exception:
             # Skip rows with invalid time formats
             continue
     return events
@@ -56,10 +56,41 @@ def get_station_coords_fast(sac_file):
         pass
     return None, None, 0.0
 
+def get_station_time_range(station_dir):
+    """
+    Scans the station directory to find the earliest and latest SAC files.
+    Used to optimize the event loop by skipping events outside the station's operation period.
+    Assumes filename format: yyyy.mm.dd.net.sta.chn.sac
+    """
+    try:
+        # List all SAC files
+        files = sorted(glob.glob(os.path.join(station_dir, "*.sac")))
+        if not files:
+            return None, None
+            
+        # Parse the first file (Start Date)
+        first_base = os.path.basename(files[0])
+        # Split: [yyyy, mm, dd, net, sta, chn, sac]
+        parts_first = first_base.split('.')
+        t_start = UTCDateTime(f"{parts_first[0]}-{parts_first[1]}-{parts_first[2]}")
+        
+        # Parse the last file (End Date)
+        last_base = os.path.basename(files[-1])
+        parts_last = last_base.split('.')
+        t_end = UTCDateTime(f"{parts_last[0]}-{parts_last[1]}-{parts_last[2]}")
+        
+        # Add 24 hours to the end time to cover the full last day
+        t_end += 86400
+        
+        return t_start, t_end
+    except Exception:
+        # Return None if parsing fails (fallback to processing all events)
+        return None, None
+
 def find_waveform_files(net, sta, start_time, duration):
     """
     Finds waveform files based on the time window (supports day-crossing).
-    Path structure: rawdata/{net}_day_sac/{net}.{sta}/...
+    Searches in both nested ({net}_day_sac) and flat ({net}.{sta}) structures.
     """
     file_list = []
     current_time = start_time
@@ -72,11 +103,15 @@ def find_waveform_files(net, sta, start_time, duration):
         check_days.append(t)
         t += 86400 # Add one day
 
-    # Construct directory path
-    parent_dir = os.path.join(cfg.RAW_DATA_DIR, f"{net}_day_sac")
-    station_dir = os.path.join(parent_dir, f"{net}.{sta}")
-    
-    if not os.path.exists(station_dir):
+    # Construct directory path (Try both structures)
+    path_nested = os.path.join(cfg.RAW_DATA_DIR, f"{net}_day_sac", f"{net}.{sta}")
+    path_flat = os.path.join(cfg.RAW_DATA_DIR, f"{net}.{sta}")
+
+    if os.path.exists(path_nested):
+        station_dir = path_nested
+    elif os.path.exists(path_flat):
+        station_dir = path_flat
+    else:
         return []
 
     for day in check_days:
@@ -160,6 +195,7 @@ def remove_response(st, net, sta, mode):
 def process_and_save(st, ev, arrival_time, st_coords, out_dir):
     """
     Applies preprocessing (detrend, filter, cut) and saves to SAC format with headers.
+    Filename Format: net.sta.yyyy.mm.dd.hh.mm.ss.chn.sac
     """
     stla, stlo, stel = st_coords
     
@@ -207,15 +243,17 @@ def process_and_save(st, ev, arrival_time, st_coords, out_dir):
         tr.stats.sac.nzmsec = ev['time'].microsecond // 1000
         
         # Relative Times
-        # b: begin time relative to origin time
         tr.stats.sac.b = tr.stats.starttime - ev['time']
-        # o: origin time offset (0.0)
         tr.stats.sac.o = 0.0
-        # a: phase arrival time relative to origin time
         tr.stats.sac.a = arrival_time - ev['time']
         tr.stats.sac.ka = cfg.TARGET_PHASE
         
-        # Save File
-        fname = f"{tr.stats.network}.{tr.stats.station}.{tr.stats.channel}.SAC"
+        # Generate Filename (Modified Requirement)
+        # Format: net.sta.yyyy.mm.dd.hh.mm.ss.chn.sac
+        t = ev['time']
+        time_str = f"{t.year:04d}.{t.month:02d}.{t.day:02d}.{t.hour:02d}.{t.minute:02d}.{t.second:02d}"
+        
+        fname = f"{tr.stats.network}.{tr.stats.station}.{time_str}.{tr.stats.channel}.sac"
         save_path = os.path.join(out_dir, fname)
+        
         tr.write(save_path, format="SAC")

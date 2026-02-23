@@ -7,7 +7,7 @@ RAW_DATA_DIR = "rawdata"
 
 # Earthquake catalog file (Excel format)
 # Required columns: origin_time, evlo, evla, evdp, mag
-CATALOG_FILE = "events.xlsx"
+CATALOG_FILE = "evtlst_usgs.xlsx"
 
 # Instrument response directory
 # The program will search for files here based on RESPONSE_MODE
@@ -38,7 +38,7 @@ CHANNEL_WILDCARD = "*"
 RESPONSE_MODE = "sacpz" 
 
 # Bandpass filter settings
-DO_FILTER = True
+DO_FILTER = False
 FREQ_MIN = 0.02  # Hz
 FREQ_MAX = 0.5   # Hz
 
