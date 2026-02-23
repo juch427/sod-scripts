@@ -11,7 +11,7 @@ This repository contains tools for a complete seismic data workflow:
 After downloading and installing [SOD](http://www.seis.sc.edu/downloads/sod/), you can run the recipe as follows:
 
 ```bash
-$ sod -f a01_6C_EQ.xml
+bash b01_downld_wave_data.sh
 ```
 
 ### Notes on Data Centers
@@ -28,7 +28,7 @@ The default Data Center for catalog and seismogram is **IRIS-DMC**. Some non-def
 
 ## Part 2: Post-Processing (Python SKS Cutter)
 
-The included Python scripts (`main.py`, `utils.py`, `config.py`) are designed to process the continuous data downloaded by SOD.
+The included Python scripts (`b02_cut_SKS_waveform.py`, `utils.py`, `config.py`) are designed to process the continuous data downloaded by SOD.
 
 ### Features
 *   **Phase Extraction**: Calculates theoretical arrival times (using `TauP`) for SKS or other phases based on an earthquake catalog.
@@ -43,12 +43,12 @@ The scripts expect the following directory structure (standard SOD output):
 
 ```text
 .
-├── config.py              # User configuration (paths, filter settings)
-├── main.py                # Main execution script
-├── utils.py               # Helper functions
-├── events.xlsx            # Input: Earthquake catalog
-├── responses/             # Input: Instrument response files
-└── rawdata/               # Input: SOD Output Directory
+├── config.py                   # User configuration (paths, filter settings)
+├── b02_cut_SKS_waveform.py     # Main execution script
+├── utils.py                    # Helper functions
+├── events.xlsx                 # Input: Earthquake catalog
+├── responses/                  # Input: Instrument response files
+└── rawdata/                    # Input: SOD Output Directory
     └── {net}_day_sac/
         └── {net}.{sta}/
             └── yyyy.mm.dd.{net}.{sta}.{chn}.sac
@@ -73,7 +73,7 @@ Edit `config.py` to control the processing logic:
 Run the main script to process the data:
 
 ```bash
-python main.py
+python b02_cut_SKS_waveform.py
 ```
 The processed waveforms will be saved in the `SKS_Waveforms_Output/` directory.
 
