@@ -44,7 +44,7 @@ The scripts expect the following directory structure (standard SOD output):
 ```text
 .
 ├── config.py                   # User configuration (paths, filter settings)
-├── b02_cut_SKS_waveform.py     # Main execution script
+├── b02_cut_eq_waveform.py      # Main execution script
 ├── utils.py                    # Helper functions
 ├── events.xlsx                 # Input: Earthquake catalog
 ├── responses/                  # Input: Instrument response files
@@ -73,7 +73,7 @@ Edit `config.py` to control the processing logic:
 Run the main script to process the data:
 
 ```bash
-python b02_cut_SKS_waveform.py
+python b02_cut_eq_waveform.py
 ```
 The processed waveforms will be saved in the `SKS_Waveforms_Output/` directory.
 
