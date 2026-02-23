@@ -21,10 +21,14 @@ OUTPUT_DIR = "SKS_Waveforms_Output"
 MIN_DIST = 85.0
 MAX_DIST = 140.0
 
-# Target seismic phase
+# Target seismic phase or origin time
+# PHASE or ORIGIN
+# WINDOW_MODE = "origin"
+WINDOW_MODE = "phase"
 TARGET_PHASE = "SKS"
 
 # Cutting window: Seconds BEFORE and AFTER the theoretical arrival time
+PAD = 20.0  # Additional padding to ensure valid data at edges after processing
 OFFSET_PRE = 100.0
 OFFSET_POST = 100.0
 
@@ -36,6 +40,7 @@ CHANNEL_WILDCARD = "*"
 # Instrument response removal mode
 # Options: 'xml' (StationXML), 'resp' (RESP files), 'sacpz' (SAC Poles & Zeros), or None (skip)
 RESPONSE_MODE = "sacpz" 
+PRE_FILTER = [0.001, 0.005, 45, 50]  # Pre-filter for response removal (Hz)
 
 # Bandpass filter settings
 DO_FILTER = False

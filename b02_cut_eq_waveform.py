@@ -2,7 +2,7 @@
 import os
 import glob
 from tqdm import tqdm
-from obspy import read, Stream
+from obspy import read, Stream, UTCDateTime
 from obspy.taup import TauPyModel
 from obspy.geodetics import locations2degrees
 
@@ -91,33 +91,35 @@ def main():
         # Use tqdm here to show progress PER STATION. 
         # 'leave=False' clears the bar after station finishes to keep output clean.
         for ev in tqdm(valid_events, desc="  Scanning Events", unit="ev", leave=False):
-            
+            otime = UTCDateTime(ev['time'])
+
             # 4.1 Epicentral Distance Filter
             dist = locations2degrees(ev['lat'], ev['lon'], stla, stlo)
             if not (cfg.MIN_DIST <= dist <= cfg.MAX_DIST):
                 continue
             
-            # 4.2 Travel Time Calculation
-            try:
-                arrivals = taup_model.get_travel_times(
-                    source_depth_in_km=ev['depth'],
-                    distance_in_degree=dist,
-                    phase_list=[cfg.TARGET_PHASE])
-                
-                if not arrivals: 
-                    continue
-                
-                # Absolute arrival time
-                sks_abs = ev['time'] + arrivals[0].time
-            except Exception: 
-                continue
+            # 4.2 Determine Target Time and Search Window Based on Mode
+            if cfg.WINDOW_MODE == 'origin':
+                target_time = otime
+                t_search_start = target_time - cfg.OFFSET_PRE - cfg.PAD
+            elif cfg.WINDOW_MODE == 'phase':               
+                try:
+                    arrivals = taup_model.get_travel_times(
+                        source_depth_in_km=ev['depth'],
+                        distance_in_degree=dist,
+                        phase_list=[cfg.TARGET_PHASE])
+                    
+                    if not arrivals: 
+                        continue
+                    
+                    # Absolute arrival time
+                    target_time = otime + arrivals[0].time
+                    t_search_start = target_time - cfg.OFFSET_PRE - cfg.PAD
+                    
+                except Exception: 
+                    continue     
 
-            # 4.3 Find Waveform Files (with Padding)
-            # Add padding to ensure valid data at the edges after processing
-            pad = 20
-            t_search_start = sks_abs - cfg.OFFSET_PRE - pad
-            duration = cfg.OFFSET_PRE + cfg.OFFSET_POST + (2 * pad)
-            
+            duration = cfg.OFFSET_PRE + cfg.OFFSET_POST + (2 * cfg.PAD)
             files = utils.find_waveform_files(net, sta, t_search_start, duration)
             if not files: 
                 continue
@@ -132,9 +134,9 @@ def main():
                 st.merge(method=1, fill_value='interpolate')
                 
                 # --- [CRITICAL STEP] 3-Component Completeness Check ---
-                # Slice a window exactly covering the SKS area for checking
-                check_win_start = sks_abs - cfg.OFFSET_PRE
-                check_win_end = sks_abs + cfg.OFFSET_POST
+                # Slice a window exactly covering the phase/origin area for checking
+                check_win_start = target_time - cfg.OFFSET_PRE
+                check_win_end = target_time + cfg.OFFSET_POST
                 
                 # Create a temporary slice (does not modify original stream)
                 st_check = st.slice(check_win_start, check_win_end)
@@ -144,8 +146,10 @@ def main():
                     continue
                 # -----------------------------------------------------
 
-                # 4.5 Remove Instrument Response (on original stream)
-                st = utils.remove_response(st, net, sta, cfg.RESPONSE_MODE)
+                # 4.5 Remove Instrument Response (on a wider window stream)
+                st_resp = st.slice(target_time - cfg.OFFSET_PRE*2 - cfg.PAD, target_time + cfg.OFFSET_POST*2 + cfg.PAD)
+
+                st = utils.remove_response(st_resp, net, sta, cfg.RESPONSE_MODE)
                 
                 # 4.6 Define Output Path (Naming Requirement)
                 if cfg.OUTPUT_STRUCTURE == 'event':
@@ -160,7 +164,7 @@ def main():
                     os.makedirs(out_path)
                 
                 # 4.7 Final Processing and Saving
-                utils.process_and_save(st, ev, sks_abs, (stla, stlo, stel), out_path)
+                utils.process_and_save(st, ev, target_time, (stla, stlo, stel), out_path)
                 
             except Exception:
                 # Catch individual waveform processing errors so the loop continues

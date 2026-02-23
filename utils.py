@@ -158,7 +158,7 @@ def remove_response(st, net, sta, mode):
     if not mode: return st
     try:
         # Pre-filter to prevent instability during deconvolution
-        pre_filt = [0.001, 0.005, 45, 50] 
+        pre_filt = cfg.PRE_FILTER 
         
         if mode == 'xml':
             # Search for StationXML files
@@ -192,7 +192,7 @@ def remove_response(st, net, sta, mode):
         
     return st
 
-def process_and_save(st, ev, arrival_time, st_coords, out_dir):
+def process_and_save(st, ev, target_time, st_coords, out_dir):
     """
     Applies preprocessing (detrend, filter, cut) and saves to SAC format with headers.
     Filename Format: net.sta.yyyy.mm.dd.hh.mm.ss.chn.sac
@@ -211,8 +211,8 @@ def process_and_save(st, ev, arrival_time, st_coords, out_dir):
         st.resample(cfg.RESAMPLE_RATE)
         
     # 2. Precise Cutting (Trim)
-    t_start = arrival_time - cfg.OFFSET_PRE
-    t_end = arrival_time + cfg.OFFSET_POST
+    t_start = target_time - cfg.OFFSET_PRE
+    t_end = target_time + cfg.OFFSET_POST
     st.trim(t_start, t_end)
     
     # Re-check length (in case trim resulted in empty data)
@@ -245,8 +245,12 @@ def process_and_save(st, ev, arrival_time, st_coords, out_dir):
         # Relative Times
         tr.stats.sac.b = tr.stats.starttime - ev['time']
         tr.stats.sac.o = 0.0
-        tr.stats.sac.a = arrival_time - ev['time']
-        tr.stats.sac.ka = cfg.TARGET_PHASE
+        if cfg.WINDOW_MODE == 'phase':
+            tr.stats.sac.a = target_time - ev['time']
+            tr.stats.sac.ka = cfg.TARGET_PHASE
+        elif cfg.WINDOW_MODE == 'origin':
+            tr.stats.sac.a = 0.0
+            tr.stats.sac.ka = 'OT'
         
         # Generate Filename (Modified Requirement)
         # Format: net.sta.yyyy.mm.dd.hh.mm.ss.chn.sac
