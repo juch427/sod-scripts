@@ -1,10 +1,11 @@
 #!/bin/bash
-# nohup ./b02.sh &
-set -e  # 遇到错误立即退出
+# To run in background: nohup ./b01_downld_wave_data.sh &
+# Exit immediately if a command exits with a non-zero status
+set -e
 
-# 清理旧文件（静默模式）
+# Clean up old files (silent mode)
 rm -rf "6c_day_sac" "SodDb" 2>/dev/null || true
 rm -f "sod_hibernate.out" *.log 2>/dev/null || true
 
-# 执行主命令
+# Execute the main command
 sod -f a01_6C_continuous_data.xml
